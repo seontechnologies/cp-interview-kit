@@ -1,0 +1,43 @@
+{
+  "name": "insighthub-frontend",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "test": "vitest",
+    "lint": "eslint src/**/*.{ts,tsx}"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.17.0",
+    "axios": "^1.6.2",
+    "chart.js": "^4.4.1",
+    "date-fns": "^3.0.6",
+    "lodash": "^4.17.21",
+    "react": "^18.2.0",
+    "react-chartjs-2": "^5.2.0",
+    "react-dom": "^18.2.0",
+    "react-grid-layout": "^1.4.4",
+    "react-hook-form": "^7.49.2",
+    "react-router-dom": "^6.21.1",
+    "zustand": "^4.4.7"
+  },
+  "devDependencies": {
+    "@types/lodash": "^4.14.202",
+    "@types/react": "^18.2.45",
+    "@types/react-dom": "^18.2.18",
+    "@types/react-grid-layout": "^1.3.5",
+    "@vitejs/plugin-react": "^4.2.1",
+    "autoprefixer": "^10.4.16",
+    "eslint": "^8.56.0",
+    "eslint-plugin-react": "^7.33.2",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "postcss": "^8.4.32",
+    "tailwindcss": "^3.4.0",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.10",
+    "vitest": "^1.1.0",
+    "jsdom": "^23.0.1"
+  }
+}

@@ -1,0 +1,229 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Organization {
+  id              String   @id @default(uuid())
+  name            String
+  slug            String   @unique
+  tier            String   @default("free") // free, starter, pro, enterprise
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Billing
+  monthlyBudget   Float    @default(0)
+  currentSpend    Float    @default(0)
+  stripeCustomerId String?
+
+  users           User[]
+  dashboards      Dashboard[]
+  widgets         Widget[]
+  analyticsEvents AnalyticsEvent[]
+  apiKeys         ApiKey[]
+  webhooks        Webhook[]
+  notifications   Notification[]
+  auditLogs       AuditLog[]
+  invoices        Invoice[]
+}
+
+model User {
+  id              String   @id @default(uuid())
+  email           String   @unique
+  passwordHash    String
+  name            String
+  role            String   @default("member") // owner, admin, member, viewer
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  lastLoginAt     DateTime?
+  avatarUrl       String?
+  isActive        Boolean  @default(true)
+
+  dashboards      Dashboard[]
+  notifications   Notification[]
+  auditLogs       AuditLog[]
+  apiKeys         ApiKey[]
+  comments        Comment[]
+  sessions        Session[]
+}
+
+model Session {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token       String   @unique
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+  userAgent   String?
+  ipAddress   String?
+}
+
+model Dashboard {
+  id              String   @id @default(uuid())
+  name            String
+  description     String?
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdById     String
+  createdBy       User     @relation(fields: [createdById], references: [id])
+  isPublic        Boolean  @default(false)
+  layout          String   @default("grid") // grid, list, freeform
+  settings        Json     @default("{}")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  widgets         Widget[]
+}
+
+model Widget {
+  id              String   @id @default(uuid())
+  name            String
+  type            String   // chart, metric, table, text
+  config          Json     @default("{}")
+  position        Json     @default("{\"x\": 0, \"y\": 0, \"w\": 4, \"h\": 3}")
+  dashboardId     String
+  dashboard       Dashboard @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  dataSource      String?  // query identifier or API endpoint
+  refreshInterval Int      @default(300) // seconds
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model AnalyticsEvent {
+  id              String   @id @default(uuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  eventType       String
+  eventName       String
+  properties      Json     @default("{}")
+  userId          String?  // External user ID from client's system
+  sessionId       String?
+  timestamp       DateTime @default(now())
+  source          String   @default("api")
+
+  // @@index([organizationId, createdAt]) - MISSING!
+}
+
+model ApiKey {
+  id              String   @id @default(uuid())
+  name            String
+  key             String   @unique
+  keyHash         String
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdById     String
+  createdBy       User     @relation(fields: [createdById], references: [id])
+  permissions     String[] @default(["read"])
+  lastUsedAt      DateTime?
+  expiresAt       DateTime?
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+}
+
+model Webhook {
+  id              String   @id @default(uuid())
+  name            String
+  url             String
+  secret          String
+  events          String[] @default(["*"])
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  isActive        Boolean  @default(true)
+  lastTriggeredAt DateTime?
+  failureCount    Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model Notification {
+  id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  type            String   // info, warning, error, success
+  title           String
+  message         String
+  link            String?
+  isRead          Boolean  @default(false)
+  createdAt       DateTime @default(now())
+}
+
+model AuditLog {
+  id              String   @id @default(uuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+  action          String
+  resourceType    String
+  resourceId      String?
+  details         Json     @default("{}")
+  ipAddress       String?
+  userAgent       String?
+  createdAt       DateTime @default(now())
+
+}
+
+model Invoice {
+  id              String   @id @default(uuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  stripeInvoiceId String?  @unique
+  amount          Float
+  currency        String   @default("usd")
+  status          String   @default("draft") // draft, pending, paid, failed
+  periodStart     DateTime
+  periodEnd       DateTime
+  paidAt          DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model Comment {
+  id              String   @id @default(uuid())
+  content         String
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  resourceType    String   // dashboard, widget
+  resourceId      String
+  parentId        String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model EmailQueue {
+  id              String   @id @default(uuid())
+  to              String
+  subject         String
+  body            String
+  status          String   @default("pending") // pending, sent, failed
+  attempts        Int      @default(0)
+  lastError       String?
+  scheduledFor    DateTime @default(now())
+  sentAt          DateTime?
+  createdAt       DateTime @default(now())
+}
+
+model UsageRecord {
+  id              String   @id @default(uuid())
+  organizationId  String
+  metric          String   // api_calls, events_ingested, storage_mb
+  value           Float
+  periodStart     DateTime
+  periodEnd       DateTime
+  createdAt       DateTime @default(now())
+
+  @@unique([organizationId, metric, periodStart])
+}
