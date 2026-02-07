@@ -4,7 +4,7 @@ import crypto from 'crypto';
 
 const prisma = new PrismaClient();
 function hashPassword(password: string): string {
-  return crypto.createHash('md5').update(password).digest('hex');
+  return crypto.createHash('sha256').update(password).digest('hex');
 }
 
 async function main() {

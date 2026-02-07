@@ -1,30 +1,30 @@
 # Architecture Overview
 
-*Last updated: 2024-03*
+*Last updated: 2026-02*
 
 ## System Diagram
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                          Frontend                                │
+│                          Frontend                               │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐  │
-│  │   React     │  │   Redux     │  │    React Query          │  │
-│  │   Router    │  │   Store     │  │    (data fetching)      │  │
+│  │   React     │  │   zustand   │  │    React Query          │  │
+│  │   Router    │  │             │  │    (data fetching)      │  │
 │  └─────────────┘  └─────────────┘  └─────────────────────────┘  │
 └────────────────────────────┬────────────────────────────────────┘
                              │ HTTP/WebSocket
 ┌────────────────────────────▼────────────────────────────────────┐
-│                          Backend                                 │
+│                          Backend                                │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐  │
 │  │   Express   │  │   Auth      │  │    Background Jobs      │  │
-│  │   Routes    │  │   (JWT)     │  │    (Bull Queue)         │  │
+│  │   Routes    │  │   (JWT)     │  │    (Native NodeJS)         |
 │  └─────────────┘  └─────────────┘  └─────────────────────────┘  │
 └────────────────────────────┬────────────────────────────────────┘
                              │
          ┌───────────────────┼───────────────────┐
          ▼                   ▼                   ▼
 ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
-│   PostgreSQL    │  │     Redis       │  │   S3 Storage    │
+│   PostgreSQL    │  │ Upcoming: Redis |  │ Upcoming: AWS S3│
 │   (Primary DB)  │  │   (Cache/Queue) │  │   (Exports)     │
 └─────────────────┘  └─────────────────┘  └─────────────────┘
 ```
@@ -33,7 +33,7 @@
 
 ### Frontend
 
-**State Management**: We use Redux for global state with Redux Toolkit for simplified setup. React Query handles all server state and caching.
+**State Management**: We use zustand. React Query handles all server state and caching.
 
 **Routing**: React Router v6 with protected routes. Authentication state is checked on each navigation.
 
@@ -45,7 +45,7 @@
 
 **Database**: PostgreSQL via Prisma ORM. All queries are parameterized to prevent SQL injection.
 
-**Caching**: Redis is used for:
+**Caching**: Redis will be used in the future for:
 - Session storage
 - API response caching (5 minute TTL)
 - Rate limiting state
