@@ -1,6 +1,6 @@
 import { useState, useCallback, memo, forwardRef } from 'react';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
-import { deleteWidget, fetchComments, createComment, deleteComment } from '../../services/api';
+import { deleteWidget, fetchComments, createComment, deleteComment, fetchWidgetData } from '../../services/api';
 import ChartWidget from '../Charts/ChartWidget';
 import MetricWidget from '../Charts/MetricWidget';
 import TableWidget from '../Charts/TableWidget';
@@ -39,6 +39,19 @@ const WidgetContainer = memo(forwardRef<HTMLDivElement, WidgetContainerProps>(fu
   const [showMenu, setShowMenu] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [newComment, setNewComment] = useState('');
+
+  // Fetch widget data
+  const { data: widgetDataResponse } = useQuery({
+    queryKey: ['widget-data', dashboardId, widget.id],
+    queryFn: () => fetchWidgetData(dashboardId, widget.id),
+    staleTime: 10000, // 10 seconds
+  });
+
+  // Merge widget data with widget config
+  const widgetWithData = {
+    ...widget,
+    data: widgetDataResponse?.data,
+  };
 
   // Intentional flaw: Comments fetched separately for each widget (N+1)
   const { data: comments, refetch: refetchComments } = useQuery({
@@ -88,24 +101,24 @@ const WidgetContainer = memo(forwardRef<HTMLDivElement, WidgetContainerProps>(fu
   };
 
   const renderWidgetContent = useCallback(() => {
-    switch (widget.type) {
+    switch (widgetWithData.type) {
       case 'chart':
-        return <ChartWidget config={widget.config} data={widget.data} />;
+        return <ChartWidget config={widgetWithData.config} data={widgetWithData.data} />;
       case 'metric':
-        return <MetricWidget config={widget.config} data={widget.data} />;
+        return <MetricWidget config={widgetWithData.config} data={widgetWithData.data} />;
       case 'table':
-        return <TableWidget config={widget.config} data={widget.data} />;
+        return <TableWidget config={widgetWithData.config} data={widgetWithData.data} />;
       case 'text':
         return (
           <div className="p-4">
-            {}
-            <div dangerouslySetInnerHTML={{ __html: widget.config?.content || '' }} />
+            { }
+            <div dangerouslySetInnerHTML={{ __html: widgetWithData.config?.content || '' }} />
           </div>
         );
       default:
         return <div className="p-4 text-gray-500">Unknown widget type</div>;
     }
-  }, [widget.type, widget.config, widget.data]);
+  }, [widgetWithData]);
 
   return (
     <div
