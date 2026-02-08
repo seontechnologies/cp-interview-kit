@@ -32,7 +32,7 @@ export default function MetricWidget({ config, data }: MetricWidgetProps) {
       default:
         return numValue.toLocaleString();
     }
-  }, [data, config]); // config is object reference
+  }, [data, config?.format, config?.prefix, config?.suffix]);
 
   // Calculate change percentage
   const changePercentage = useMemo(() => {

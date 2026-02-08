@@ -1,4 +1,3 @@
-import { useEffect } from 'react';
 import { useAuthStore } from '../store/authSlice';
 
 export function useAuth() {
@@ -10,11 +9,7 @@ export function useAuth() {
     error,
     login,
     logout,
-    checkAuth,
   } = useAuthStore();
-  useEffect(() => {
-    checkAuth();
-  }, []);
 
   return {
     user,
