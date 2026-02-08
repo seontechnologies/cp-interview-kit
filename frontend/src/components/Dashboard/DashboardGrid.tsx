@@ -1,19 +1,36 @@
 import { useState, useCallback, ReactNode } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import GridLayout from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
-import { useDashboardStore } from '../../store/dashboardSlice';
 import { updateWidget } from '../../services/api';
 
+interface Widget {
+  id: string;
+  name: string;
+  type: string;
+  config: any;
+  position: { x: number; y: number; w: number; h: number };
+  data?: any;
+}
+
+interface Dashboard {
+  id: string;
+  name: string;
+  description?: string;
+  layout: string;
+  widgets: Widget[];
+}
+
 interface DashboardGridProps {
-  dashboardId: string;
+  dashboard: Dashboard;
   children: ReactNode;
 }
 
-export default function DashboardGrid({ dashboardId, children }: DashboardGridProps) {
-  const { currentDashboard, updateWidget: updateWidgetInStore } = useDashboardStore();
+export default function DashboardGrid({ dashboard, children }: DashboardGridProps) {
+  const queryClient = useQueryClient();
   const [isDragging, setIsDragging] = useState(false);
-  const layout = currentDashboard?.widgets.map((widget) => ({
+  const layout = dashboard.widgets.map((widget) => ({
     i: widget.id,
     x: widget.position?.x ?? 0,
     y: widget.position?.y ?? 0,
@@ -21,12 +38,13 @@ export default function DashboardGrid({ dashboardId, children }: DashboardGridPr
     h: widget.position?.h ?? 3,
     minW: 2,
     minH: 2,
-  })) || [];
+  }));
+
   const handleLayoutChange = useCallback(
     async (newLayout: any[]) => {
-      if (!currentDashboard || isDragging) return;
+      if (isDragging) return;
       for (const item of newLayout) {
-        const widget = currentDashboard.widgets.find((w) => w.id === item.i);
+        const widget = dashboard.widgets.find((w) => w.id === item.i);
         if (widget) {
           const newPosition = { x: item.x, y: item.y, w: item.w, h: item.h };
 
@@ -37,16 +55,19 @@ export default function DashboardGrid({ dashboardId, children }: DashboardGridPr
             widget.position?.w !== newPosition.w ||
             widget.position?.h !== newPosition.h
           ) {
-            // Update store
-            updateWidgetInStore(dashboardId, item.i, { position: newPosition });
-
-            // Update API (fire and forget - no await)
-            updateWidget(dashboardId, item.i, { position: newPosition });
+            // Update API
+            try {
+              await updateWidget(dashboard.id, item.i, { position: newPosition });
+              // Invalidate to refetch with new positions
+              queryClient.invalidateQueries({ queryKey: ['dashboard', dashboard.id] });
+            } catch (error) {
+              console.error('Failed to update widget position:', error);
+            }
           }
         }
       }
     },
-    [currentDashboard, dashboardId, isDragging]
+    [dashboard, isDragging, queryClient]
   );
 
   const handleDragStart = () => {
@@ -55,10 +76,6 @@ export default function DashboardGrid({ dashboardId, children }: DashboardGridPr
 
   const handleDragStop = () => {
     setIsDragging(false);
-  };
-
-  if (!currentDashboard) {
-    return null;
   }
 
   return (
