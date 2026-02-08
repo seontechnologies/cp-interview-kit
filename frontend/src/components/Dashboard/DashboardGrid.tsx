@@ -43,9 +43,13 @@ export default function DashboardGrid({ dashboard, children }: DashboardGridProp
   const handleLayoutChange = useCallback(
     async (newLayout: any[]) => {
       if (isDragging) return;
-      for (const item of newLayout) {
-        const widget = dashboard.widgets.find((w) => w.id === item.i);
-        if (widget) {
+
+      // Batch all position updates
+      const updates = newLayout
+        .map((item) => {
+          const widget = dashboard.widgets.find((w) => w.id === item.i);
+          if (!widget) return null;
+
           const newPosition = { x: item.x, y: item.y, w: item.w, h: item.h };
 
           // Check if position actually changed
@@ -55,16 +59,39 @@ export default function DashboardGrid({ dashboard, children }: DashboardGridProp
             widget.position?.w !== newPosition.w ||
             widget.position?.h !== newPosition.h
           ) {
-            // Update API
-            try {
-              await updateWidget(dashboard.id, item.i, { position: newPosition });
-              // Invalidate to refetch with new positions
-              queryClient.invalidateQueries({ queryKey: ['dashboard', dashboard.id] });
-            } catch (error) {
-              console.error('Failed to update widget position:', error);
-            }
+            return { widgetId: item.i, position: newPosition };
           }
-        }
+          return null;
+        })
+        .filter((update): update is { widgetId: string; position: any } => update !== null);
+
+      if (updates.length === 0) return;
+
+      // Optimistically update the cache
+      const previousData = queryClient.getQueryData(['dashboard', dashboard.id]);
+
+      queryClient.setQueryData(['dashboard', dashboard.id], (old: any) => {
+        if (!old) return old;
+        return {
+          ...old,
+          widgets: old.widgets.map((w: Widget) => {
+            const update = updates.find((u) => u.widgetId === w.id);
+            return update ? { ...w, position: update.position } : w;
+          }),
+        };
+      });
+
+      // Send all updates in parallel
+      try {
+        await Promise.all(
+          updates.map(({ widgetId, position }) =>
+            updateWidget(dashboard.id, widgetId, { position })
+          )
+        );
+      } catch (error) {
+        console.error('Failed to update widget positions:', error);
+        // Rollback to previous state on error
+        queryClient.setQueryData(['dashboard', dashboard.id], previousData);
       }
     },
     [dashboard, isDragging, queryClient]

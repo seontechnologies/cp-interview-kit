@@ -112,8 +112,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const data = await response.json();
 
       if (data.valid) {
-        const storedUser = localStorage.getItem('user');
-        const user = storedUser ? JSON.parse(storedUser) : data.user;
+        // Use fresh data from server, not stale localStorage
+        const user = data.user;
+
+        // Update localStorage with fresh data
+        if (user) {
+          localStorage.setItem('user', JSON.stringify(user));
+        }
 
         set({
           user,
