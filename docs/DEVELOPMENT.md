@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Node.js 18+ (we recommend using nvm)
+- Node.js 20+ (we recommend using nvm)
 - PostgreSQL 14+
 - Redis 6+
 - Docker (optional, for containerized development)
@@ -23,6 +23,7 @@ Copy the example environment file:
 
 ```bash
 cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env
 ```
 
 Required environment variables:
@@ -59,7 +60,8 @@ npm run dev
 This starts:
 - Backend on http://localhost:3001
 - Frontend on http://localhost:3000
-- Redis (if using Docker)
+
+Redis is not currently in use.
 
 ## Development Workflow
 
@@ -68,7 +70,7 @@ This starts:
 1. Create a feature branch: `git checkout -b feature/my-feature`
 2. Make your changes
 3. Run tests: `npm test`
-4. Run linter: `npm run lint`
+4. TODO: Add linter: `npm run lint`
 5. Commit with conventional commits: `git commit -m "feat: add new feature"`
 
 ### Database Changes
@@ -130,18 +132,8 @@ E2E tests use Playwright and require the full stack to be running.
 
 ## Code Style
 
-We use ESLint and Prettier for code style. Configuration is in the root `eslint.config.js`.
+TODO: We will use ESLint and Prettier for code style. Prettier config is added in `.prettierrc`. ESLint configuration will be added later in the root `eslint.config.js`.
 
-```bash
-# Check for issues
-npm run lint
-
-# Auto-fix issues
-npm run lint:fix
-
-# Format code
-npm run format
-```
 
 ### Commit Messages
 
@@ -158,7 +150,7 @@ We follow [Conventional Commits](https://www.conventionalcommits.org/):
 
 ### Backend
 
-Use the built-in Node.js debugger:
+TODO: Use the built-in Node.js debugger:
 
 ```bash
 cd backend
@@ -231,8 +223,8 @@ const prisma = new PrismaClient({
 
 ## Deployment
 
-See `docs/DEPLOYMENT.md` for production deployment instructions.
+TODO: See `docs/DEPLOYMENT.md` for production deployment instructions.
 
 ---
 
-*Last updated: March 2024*
+*Last updated: February 2026*

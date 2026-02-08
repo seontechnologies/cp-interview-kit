@@ -72,7 +72,7 @@ export default function ChartWidget({ config, data }: ChartWidgetProps) {
         },
       ],
     };
-  }, [data, config]); // config is object, will fail equality check
+  }, [data, config?.title, config?.colors?.join(',')]);
   const options = {
     responsive: true,
     maintainAspectRatio: false,

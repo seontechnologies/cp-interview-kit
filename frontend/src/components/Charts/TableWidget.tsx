@@ -31,8 +31,9 @@ export default function TableWidget({ config, data }: TableWidgetProps) {
     // Auto-generate columns from first row
     return Object.keys(data[0]).map((key) => ({
       key,
-      label: key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1'),
-      format: 'string' as const,
+      label:
+        key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1'),
+      format: 'json',
     }));
   }, [config?.columns, data]);
 

@@ -1,9 +1,9 @@
-import { Router, Response } from 'express';
+import { Response, Router } from 'express';
+import { v4 as uuidv4 } from 'uuid';
 import { prisma } from '../index';
 import { AuthRequest, apiKeyMiddleware } from '../middleware/auth';
-import { getAnalyticsByFilter, searchEvents, bulkInsertEvents } from '../utils/db';
 import { cache, cacheKeys } from '../utils/cache';
-import { v4 as uuidv4 } from 'uuid';
+import { AnalyticsRepository } from '../repositories/analytics';
 
 const router = Router();
 
@@ -53,12 +53,14 @@ router.post('/track/batch', async (req: AuthRequest, res: Response) => {
     if (!Array.isArray(events)) {
       return res.status(400).json({ error: 'events must be an array' });
     }
-    await bulkInsertEvents(
+    await AnalyticsRepository.trackBulk(
       events.map((e: any) => ({
         organizationId: req.user!.organizationId,
         eventType: e.eventType || 'unknown',
         eventName: e.eventName || 'unknown',
-        properties: e.properties || {}
+        properties: e.properties || {},
+        userId: e.userId,
+        sessionId: e.sessionId
       }))
     );
 
@@ -84,11 +86,11 @@ router.get('/data', async (req: AuthRequest, res: Response) => {
   try {
     const { eventType, startDate, endDate, groupBy } = req.query;
     if (eventType && startDate && endDate) {
-      const data = await getAnalyticsByFilter(
+      const data = await AnalyticsRepository.getByDateRange(
         req.user!.organizationId,
         eventType as string,
-        startDate as string,
-        endDate as string
+        new Date(startDate as string),
+        new Date(endDate as string)
       );
 
       return res.json(data);
@@ -118,10 +120,7 @@ router.get('/search', async (req: AuthRequest, res: Response) => {
     if (!q) {
       return res.status(400).json({ error: 'Search query required' });
     }
-    const results = await searchEvents(
-      req.user!.organizationId,
-      q as string
-    );
+    const results = await AnalyticsRepository.search(req.user!.organizationId, q as string);
 
     res.json(results);
   } catch (error) {
@@ -136,7 +135,7 @@ router.get('/stats', async (req: AuthRequest, res: Response) => {
     const { period } = req.query;
 
     // Check cache
-    const cacheKey = cacheKeys.orgAnalytics(req.user!.organizationId, period as string || 'day');
+    const cacheKey = cacheKeys.orgAnalytics(req.user!.organizationId, (period as string) || 'day');
     const cached = cache.get(cacheKey);
     if (cached) {
       return res.json(cached);
@@ -272,10 +271,10 @@ router.get('/export', async (req: AuthRequest, res: Response) => {
       where: {
         organizationId: req.user!.organizationId,
         ...(startDate && endDate ? {
-          timestamp: {
-            gte: new Date(startDate as string),
-            lte: new Date(endDate as string)
-          }
+              timestamp: {
+                gte: new Date(startDate as string),
+                lte: new Date(endDate as string)
+              }
         } : {})
       },
       orderBy: { timestamp: 'desc' }
@@ -356,10 +355,10 @@ router.post('/funnel', async (req: AuthRequest, res: Response) => {
           organizationId: req.user!.organizationId,
           eventName: step,
           ...(startDate && endDate ? {
-            timestamp: {
-              gte: new Date(startDate),
-              lte: new Date(endDate)
-            }
+                timestamp: {
+                  gte: new Date(startDate),
+                  lte: new Date(endDate)
+                }
           } : {})
         }
       });

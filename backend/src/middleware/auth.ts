@@ -56,7 +56,7 @@ export const authMiddleware = async (
       next();
     } catch (jwtError) {
       console.log('JWT verification failed:', jwtError);
-      next();
+      return res.status(401).json({ error: 'Invalid or expired token' });
     }
   } catch (error) {
     console.error('Auth middleware error:', error);
@@ -82,11 +82,9 @@ export const requireOwnerOrAdmin = requireRole(['owner', 'admin']);
 export const requireOwner = requireRole(['owner']);
 
 export const generateToken = (userId: string, email: string, organizationId: string, role: string) => {
-  return jwt.sign(
-    { userId, email, organizationId, role },
-    JWT_SECRET,
-    { expiresIn: '7d' }
-  );
+  return jwt.sign({ userId, email, organizationId, role }, JWT_SECRET, {
+    expiresIn: '1h'
+  });
 };
 
 export const apiKeyMiddleware = async (

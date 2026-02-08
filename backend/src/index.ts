@@ -1,36 +1,90 @@
-import express from 'express';
-import cors from 'cors';
-import { createServer } from 'http';
-import { WebSocketServer } from 'ws';
 import { PrismaClient } from '@prisma/client';
+import cors from 'cors';
+import express from 'express';
+import helmet from 'helmet';
+import { createServer } from 'http';
+import swaggerUi from 'swagger-ui-express';
+import { WebSocketServer } from 'ws';
 
+import analyticsRoutes from './routes/analytics';
+import auditRoutes from './routes/audit';
 import authRoutes from './routes/auth';
+import billingRoutes from './routes/billing';
+import dashboardRoutes from './routes/dashboard';
+import notificationsRoutes from './routes/notifications';
 import organizationsRoutes from './routes/organizations';
 import usersRoutes from './routes/users';
-import dashboardRoutes from './routes/dashboard';
-import analyticsRoutes from './routes/analytics';
-import billingRoutes from './routes/billing';
-import notificationsRoutes from './routes/notifications';
-import auditRoutes from './routes/audit';
 import webhooksRoutes from './routes/webhooks';
 
-import { authMiddleware } from './middleware/auth';
-import { rateLimiter } from './middleware/rateLimit';
+import { swaggerSpec } from './config/swagger';
 import { startNotificationJob } from './jobs/notifications';
 import { startReportJob } from './jobs/reports';
+import { authMiddleware } from './middleware/auth';
+import { rateLimiter } from './middleware/rateLimit';
 
 const app = express();
 const server = createServer(app);
 const wss = new WebSocketServer({ server });
 
 export const prisma = new PrismaClient();
-app.use(cors({
-  origin: '*',
-  credentials: true
-}));
 
-app.use(express.json());
+app.use(
+  helmet({
+    contentSecurityPolicy: process.env.NODE_ENV === 'production',
+    crossOriginEmbedderPolicy: false
+  })
+);
+
+// CORS Configuration - Environment-specific
+const PORT = process.env.PORT || 3001;
+const backendOrigin = `http://localhost:${PORT}`;
+
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',').map((origin) => origin.trim())
+  : ['http://localhost:3000', 'http://localhost:5173'];
+
+// Allow backend's own origin in dev (for Swagger UI)
+if (!allowedOrigins.includes(backendOrigin) && process.env.NODE_ENV !== 'production') {
+  allowedOrigins.push(backendOrigin);
+  console.log("Allowed origins are:", JSON.stringify(allowedOrigins));
+}
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Requests with no origin OK (curl, Postman, same-origin)
+      if (!origin) return callback(null, true);
+
+      if (allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        console.warn(`Blocked CORS request from origin: ${origin}`);
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    exposedHeaders: ['Content-Range', 'X-Content-Range'],
+    maxAge: 300 // Cache preflight requests for 5 minutes
+  })
+);
+
+app.use(express.json({ limit: '2mb' }));
 app.use(rateLimiter);
+
+// Swagger UI - Only in development mode
+if (process.env.NODE_ENV !== 'production') {
+  app.use(
+    '/api-docs',
+    swaggerUi.serve,
+    swaggerUi.setup(swaggerSpec, {
+      explorer: true,
+      customCss: '.swagger-ui .topbar { display: none }'
+    })
+  );
+  console.log('You are in dev mode. Access Swagger UI at /api-docs');
+}
 
 // Health check - this is fine, no auth needed
 app.get('/health', (req, res) => {
@@ -94,21 +148,31 @@ export function broadcastToOrg(orgId: string, message: object) {
 // Global error handler
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   console.error('Unhandled error:', err);
-  res.status(500).json({
-    error: 'Internal server error',
-    message: err.message,
-    stack: err.stack
+
+  // Security: Don't expose stack traces in production
+  const isDevelopment = process.env.NODE_ENV !== 'production';
+
+  res.status(err.status || 500).json({
+    error: err.message || 'Internal server error',
+    ...(isDevelopment && {
+      message: err.message,
+      stack: err.stack
+    })
   });
 });
 
-// Start background jobs
-startNotificationJob();
-startReportJob();
+// Start background jobs only if not in test environment
+if (process.env.NODE_ENV !== 'test') {
+  startNotificationJob();
+  startReportJob();
+}
 
-const PORT = process.env.PORT || 3001;
-
-server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+// Only start the server if this file is run directly (not imported for tests)
+if (require.main === module) {
+  server.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+}
 
 export default app;
+export { server };

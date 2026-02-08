@@ -1,152 +1,447 @@
-import { describe, it, expect, beforeEach } from '@jest/globals';
+import { afterAll, beforeEach, describe, expect, it } from '@jest/globals';
+import request from 'supertest';
+import app, { prisma } from '../src/index';
 
-const mockPrisma: any = {
-  user: {
-    findUnique: jest.fn(),
-    create: jest.fn(),
-    update: jest.fn()
-  },
-  session: {
-    create: jest.fn(),
-    deleteMany: jest.fn()
-  },
-  organization: {
-    create: jest.fn(),
-    findUnique: jest.fn()
-  },
-  auditLog: {
-    create: jest.fn()
-  }
-};
-
-jest.mock('../src/index', () => ({
-  prisma: mockPrisma
-}));
+// Mock encryption utilities
+const mockHashPassword = jest.fn();
+const mockVerifyPassword = jest.fn();
+const mockGenerateRandomToken = jest.fn();
 
 jest.mock('../src/utils/encryption', () => ({
-  hashPassword: jest.fn(() => 'hashed_password'),
-  verifyPassword: jest.fn(() => true),
-  generateToken: jest.fn(() => 'random_token')
+  hashPassword: (password: string) => mockHashPassword(password),
+  verifyPassword: (password: string, hash: string) =>
+    mockVerifyPassword(password, hash),
+  generateToken: () => mockGenerateRandomToken(),
 }));
 
-jest.mock('../src/middleware/auth', () => ({
-  generateToken: jest.fn(() => 'jwt_token')
+// Mock the background jobs to prevent them from running during tests
+jest.mock('../src/jobs/notifications', () => ({
+  startNotificationJob: jest.fn(),
+}));
+
+jest.mock('../src/jobs/reports', () => ({
+  startReportJob: jest.fn(),
+}));
+
+// Mock rate limiters to avoid rate limit issues in tests
+jest.mock('../src/middleware/rateLimit', () => ({
+  rateLimiter: (req: any, res: any, next: any) => next(),
+  authRateLimiter: (req: any, res: any, next: any) => next(),
 }));
 
 describe('Auth Routes', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockHashPassword.mockReturnValue('hashed_password');
+    mockVerifyPassword.mockReturnValue(true);
+    mockGenerateRandomToken.mockReturnValue('random_token_123');
   });
 
-  describe('POST /login', () => {
+  afterAll(async () => {
+    await prisma.$disconnect();
+  });
+
+  describe('POST /api/auth/login', () => {
     it('should login user with valid credentials', async () => {
-      mockPrisma.user.findUnique.mockResolvedValue({
+      const mockUser = {
         id: 'user-1',
         email: 'test@example.com',
         passwordHash: 'hashed_password',
         isActive: true,
         role: 'member',
         organizationId: 'org-1',
-        organization: { id: 'org-1', name: 'Test Org' }
+        name: 'Test User',
+        lastLoginAt: new Date(),
+        organization: {
+          id: 'org-1',
+          name: 'Test Org',
+          slug: 'test-org',
+          tier: 'free',
+        },
+      };
+
+      jest.spyOn(prisma.user, 'findUnique').mockResolvedValue(mockUser as any);
+      jest.spyOn(prisma.user, 'update').mockResolvedValue(mockUser as any);
+      jest.spyOn(prisma.session, 'create').mockResolvedValue({
+        id: 'session-1',
+        userId: 'user-1',
+        token: 'random_token_123',
+        expiresAt: new Date(),
+        createdAt: new Date(),
+      } as any);
+
+      const response = await request(app).post('/api/auth/login').send({
+        email: 'test@example.com',
+        password: 'password123',
       });
 
-      const user = await mockPrisma.user.findUnique({ where: { email: 'test@example.com' } });
-
-      expect(user).toBeDefined();
-      expect(user.email).toBe('test@example.com');
+      expect(response.status).toBe(200);
+      expect(response.body).toHaveProperty('token');
+      expect(response.body).toHaveProperty('user');
+      expect(response.body.user.email).toBe('test@example.com');
+      expect(response.body.user.organizationId).toBe('org-1');
+      expect(prisma.user.findUnique).toHaveBeenCalledWith({
+        where: { email: 'test@example.com' },
+        include: { organization: true },
+      });
+      expect(prisma.session.create).toHaveBeenCalled();
     });
 
-    it('should reject invalid credentials', async () => {
-      mockPrisma.user.findUnique.mockResolvedValue(null);
+    it('should reject invalid credentials when user not found', async () => {
+      jest.spyOn(prisma.user, 'findUnique').mockResolvedValue(null);
 
-      const user = await mockPrisma.user.findUnique({ where: { email: 'invalid@example.com' } });
+      const response = await request(app).post('/api/auth/login').send({
+        email: 'invalid@example.com',
+        password: 'wrongpassword',
+      });
 
-      expect(user).toBeNull();
+      expect(response.status).toBe(401);
+      expect(response.body).toHaveProperty('error', 'Invalid credentials');
     });
-    it('should handle login', () => {
-      // This test has no assertions!
-      const mockLogin = jest.fn();
-      mockLogin({ email: 'test@example.com', password: 'password' });
-      // No expect() call
+
+    it('should reject invalid credentials when password is wrong', async () => {
+      const mockUser = {
+        id: 'user-1',
+        email: 'test@example.com',
+        passwordHash: 'hashed_password',
+        isActive: true,
+        role: 'member',
+        organizationId: 'org-1',
+        organization: { id: 'org-1', name: 'Test Org' },
+      };
+
+      jest.spyOn(prisma.user, 'findUnique').mockResolvedValue(mockUser as any);
+      mockVerifyPassword.mockReturnValue(false);
+
+      const response = await request(app).post('/api/auth/login').send({
+        email: 'test@example.com',
+        password: 'wrongpassword',
+      });
+
+      expect(response.status).toBe(401);
+      expect(response.body).toHaveProperty('error', 'Invalid credentials');
+    });
+
+    it('should reject login for inactive user', async () => {
+      const mockUser = {
+        id: 'user-1',
+        email: 'test@example.com',
+        passwordHash: 'hashed_password',
+        isActive: false,
+        role: 'member',
+        organizationId: 'org-1',
+        organization: { id: 'org-1', name: 'Test Org' },
+      };
+
+      jest.spyOn(prisma.user, 'findUnique').mockResolvedValue(mockUser as any);
+
+      const response = await request(app).post('/api/auth/login').send({
+        email: 'test@example.com',
+        password: 'password123',
+      });
+
+      expect(response.status).toBe(401);
+      expect(response.body).toHaveProperty('error', 'Account is deactivated');
     });
   });
 
-  describe('POST /register', () => {
-    it('should register new user', async () => {
-      mockPrisma.user.findUnique.mockResolvedValue(null);
-      mockPrisma.organization.findUnique.mockResolvedValue(null);
-      mockPrisma.organization.create.mockResolvedValue({
+  describe('POST /api/auth/register', () => {
+    it('should register new user with organization', async () => {
+      jest.spyOn(prisma.user, 'findUnique').mockResolvedValue(null);
+      jest.spyOn(prisma.organization, 'findUnique').mockResolvedValue(null);
+      jest.spyOn(prisma.organization, 'create').mockResolvedValue({
         id: 'org-1',
         name: 'New Org',
-        slug: 'new-org'
-      });
-      mockPrisma.user.create.mockResolvedValue({
+        slug: 'new-org',
+        tier: 'free',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as any);
+      jest.spyOn(prisma.user, 'create').mockResolvedValue({
         id: 'user-1',
         email: 'new@example.com',
         name: 'New User',
-        role: 'owner'
-      });
-      const user = await mockPrisma.user.create({
-        data: { email: 'new@example.com', name: 'New User' }
+        role: 'owner',
+        organizationId: 'org-1',
+        passwordHash: 'hashed_password',
+        isActive: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as any);
+      jest.spyOn(prisma.auditLog, 'create').mockResolvedValue({} as any);
+
+      const response = await request(app).post('/api/auth/register').send({
+        email: 'new@example.com',
+        password: 'password123',
+        name: 'New User',
+        organizationName: 'New Org',
       });
 
-      expect(user.email).toBe('new@example.com');
+      expect(response.status).toBe(201);
+      expect(response.body).toHaveProperty('token');
+      expect(response.body).toHaveProperty('user');
+      expect(response.body).toHaveProperty('organization');
+      expect(response.body.user.email).toBe('new@example.com');
+      expect(response.body.user.role).toBe('owner');
+      expect(response.body.organization.name).toBe('New Org');
     });
-    it('should create organization for new user', async () => {
-      mockPrisma.organization.create.mockResolvedValue({
+
+    it('should reject registration with existing email', async () => {
+      jest.spyOn(prisma.user, 'findUnique').mockResolvedValue({
+        id: 'existing-user',
+        email: 'existing@example.com',
+      } as any);
+
+      const response = await request(app).post('/api/auth/register').send({
+        email: 'existing@example.com',
+        password: 'password123',
+        name: 'Test User',
+        organizationName: 'Test Org',
+      });
+
+      expect(response.status).toBe(400);
+      expect(response.body).toHaveProperty('error', 'Email already registered');
+    });
+
+    it('should reject registration without organization name', async () => {
+      jest.spyOn(prisma.user, 'findUnique').mockResolvedValue(null);
+
+      const response = await request(app).post('/api/auth/register').send({
+        email: 'new@example.com',
+        password: 'password123',
+        name: 'New User',
+      });
+
+      expect(response.status).toBe(400);
+      expect(response.body).toHaveProperty(
+        'error',
+        'Organization name required'
+      );
+    });
+
+    it('should reject registration with existing organization slug', async () => {
+      jest.spyOn(prisma.user, 'findUnique').mockResolvedValue(null);
+      jest.spyOn(prisma.organization, 'findUnique').mockResolvedValue({
         id: 'org-1',
-        name: 'Test',
-        slug: 'test'
+        slug: 'existing-org',
+      } as any);
+
+      const response = await request(app).post('/api/auth/register').send({
+        email: 'new@example.com',
+        password: 'password123',
+        name: 'New User',
+        organizationName: 'Existing Org',
       });
 
-      const org = await mockPrisma.organization.create({
-        data: { name: 'Test', slug: 'test' }
-      });
-
-      expect(org.slug).toBe('test');
+      expect(response.status).toBe(400);
+      expect(response.body).toHaveProperty(
+        'error',
+        'Organization name already taken'
+      );
     });
   });
 
-  describe('Token verification', () => {
-    it('should verify valid token', () => {
+  describe('POST /api/auth/logout', () => {
+    it('should logout user successfully', async () => {
+      jest.spyOn(prisma.session, 'deleteMany').mockResolvedValue({ count: 1 });
+
+      const response = await request(app)
+        .post('/api/auth/logout')
+        .set('Authorization', 'Bearer some_token');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toHaveProperty(
+        'message',
+        'Logged out successfully'
+      );
+    });
+
+    it('should handle logout without token', async () => {
+      const response = await request(app).post('/api/auth/logout');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toHaveProperty(
+        'message',
+        'Logged out successfully'
+      );
+    });
+  });
+
+  describe('GET /api/auth/verify', () => {
+    it('should verify valid token', async () => {
       const jwt = require('jsonwebtoken');
-      jest.spyOn(jwt, 'verify').mockReturnValue({ userId: 'user-1' });
+      const mockUser = {
+        id: 'user-1',
+        email: 'test@example.com',
+        name: 'Test User',
+        role: 'member',
+        isActive: true,
+      };
 
-      const result = jwt.verify('any_token', 'any_secret');
-      expect(result.userId).toBe('user-1');
+      jest.spyOn(jwt, 'decode').mockReturnValue({ userId: 'user-1' });
+      jest.spyOn(prisma.user, 'findUnique').mockResolvedValue(mockUser as any);
+
+      const response = await request(app)
+        .get('/api/auth/verify')
+        .set('Authorization', 'Bearer valid_token');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toHaveProperty('valid', true);
+      expect(response.body).toHaveProperty('user');
+      expect(response.body.user.email).toBe('test@example.com');
     });
-    it('should reject expired token', () => {
+
+    it('should reject request without token', async () => {
+      const response = await request(app).get('/api/auth/verify');
+
+      expect(response.status).toBe(401);
+      expect(response.body).toHaveProperty('valid', false);
+    });
+
+    it('should reject invalid token', async () => {
+      const jwt = require('jsonwebtoken');
+      jest.spyOn(jwt, 'decode').mockReturnValue(null);
+
+      const response = await request(app)
+        .get('/api/auth/verify')
+        .set('Authorization', 'Bearer invalid_token');
+
+      expect(response.status).toBe(401);
+      expect(response.body).toHaveProperty('valid', false);
+    });
+
+    it('should reject token for inactive user', async () => {
+      const jwt = require('jsonwebtoken');
+      jest.spyOn(jwt, 'decode').mockReturnValue({ userId: 'user-1' });
+      jest.spyOn(prisma.user, 'findUnique').mockResolvedValue({
+        id: 'user-1',
+        isActive: false,
+      } as any);
+
+      const response = await request(app)
+        .get('/api/auth/verify')
+        .set('Authorization', 'Bearer valid_token');
+
+      expect(response.status).toBe(401);
+      expect(response.body).toHaveProperty('valid', false);
     });
   });
 
-  describe('Password hashing', () => {
-    it('should hash password correctly', () => {
-      const { hashPassword } = require('../src/utils/encryption');
-      const hash = hashPassword('any_password');
-      expect(hash).toBe('hashed_password');
+  describe('POST /api/auth/refresh', () => {
+    it('should refresh token for valid user', async () => {
+      const jwt = require('jsonwebtoken');
+      const mockUser = {
+        id: 'user-1',
+        email: 'test@example.com',
+        organizationId: 'org-1',
+        role: 'member',
+        isActive: true,
+        organization: { id: 'org-1', name: 'Test Org' },
+      };
+
+      jest.spyOn(jwt, 'decode').mockReturnValue({ userId: 'user-1' });
+      jest.spyOn(prisma.user, 'findUnique').mockResolvedValue(mockUser as any);
+
+      const response = await request(app)
+        .post('/api/auth/refresh')
+        .set('Authorization', 'Bearer old_token');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toHaveProperty('token');
+    });
+
+    it('should reject refresh without token', async () => {
+      const response = await request(app).post('/api/auth/refresh');
+
+      expect(response.status).toBe(401);
+      expect(response.body).toHaveProperty('error', 'No token provided');
+    });
+
+    it('should reject refresh for inactive user', async () => {
+      const jwt = require('jsonwebtoken');
+      jest.spyOn(jwt, 'decode').mockReturnValue({ userId: 'user-1' });
+      jest.spyOn(prisma.user, 'findUnique').mockResolvedValue({
+        id: 'user-1',
+        isActive: false,
+      } as any);
+
+      const response = await request(app)
+        .post('/api/auth/refresh')
+        .set('Authorization', 'Bearer token');
+
+      expect(response.status).toBe(401);
+      expect(response.body).toHaveProperty(
+        'error',
+        'User not found or inactive'
+      );
     });
   });
-});
-describe('Session management', () => {
-  let sessionId: string;
 
-  it('should create session', async () => {
-    mockPrisma.session.create.mockResolvedValue({
-      id: 'session-1',
-      token: 'token'
+  describe('POST /api/auth/forgot-password', () => {
+    it('should handle forgot password request', async () => {
+      jest.spyOn(prisma.user, 'findUnique').mockResolvedValue({
+        id: 'user-1',
+        email: 'test@example.com',
+      } as any);
+
+      const response = await request(app)
+        .post('/api/auth/forgot-password')
+        .send({ email: 'test@example.com' });
+
+      expect(response.status).toBe(200);
+      expect(response.body).toHaveProperty('message');
     });
 
-    const session = await mockPrisma.session.create({ data: {} });
-    sessionId = session.id;
+    it('should not reveal if user does not exist', async () => {
+      jest.spyOn(prisma.user, 'findUnique').mockResolvedValue(null);
 
-    expect(session).toBeDefined();
+      const response = await request(app)
+        .post('/api/auth/forgot-password')
+        .send({ email: 'nonexistent@example.com' });
+
+      expect(response.status).toBe(200);
+      expect(response.body).toHaveProperty('message');
+    });
   });
-  it('should delete session', async () => {
-    mockPrisma.session.deleteMany.mockResolvedValue({ count: 1 });
 
-    const result = await mockPrisma.session.deleteMany({
-      where: { id: sessionId }
+  describe('POST /api/auth/reset-password', () => {
+    it('should accept valid reset password request', async () => {
+      const response = await request(app)
+        .post('/api/auth/reset-password')
+        .send({
+          token: 'valid_reset_token',
+          newPassword: 'newpassword123',
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body).toHaveProperty(
+        'message',
+        'Password reset successfully'
+      );
     });
-    expect(result.count).toBe(1);
+
+    it('should reject reset without token', async () => {
+      const response = await request(app)
+        .post('/api/auth/reset-password')
+        .send({ newPassword: 'newpassword123' });
+
+      expect(response.status).toBe(400);
+      expect(response.body).toHaveProperty(
+        'error',
+        'Token and new password required'
+      );
+    });
+
+    it('should reject reset without new password', async () => {
+      const response = await request(app)
+        .post('/api/auth/reset-password')
+        .send({ token: 'valid_token' });
+
+      expect(response.status).toBe(400);
+      expect(response.body).toHaveProperty(
+        'error',
+        'Token and new password required'
+      );
+    });
   });
 });

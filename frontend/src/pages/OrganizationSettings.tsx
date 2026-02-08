@@ -10,14 +10,14 @@ import {
   createApiKey,
   deleteApiKey,
   transferOwnership,
-  fetchTeamMembers
+  fetchTeamMembers,
 } from '../services/api';
 import { useAuthStore } from '../store/authSlice';
 
 export default function OrganizationSettings() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const { user, logout } = useAuthStore();
+  const { user, logout, isLoading: authLoading } = useAuthStore();
 
   const [orgName, setOrgName] = useState('');
   const [orgSlug, setOrgSlug] = useState('');
@@ -135,7 +135,7 @@ export default function OrganizationSettings() {
     }
   };
 
-  if (loadingOrg) {
+  if (loadingOrg || authLoading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-gray-500">Loading organization settings...</div>
@@ -143,7 +143,13 @@ export default function OrganizationSettings() {
     );
   }
 
-  const isOwner = user?.role === 'owner';
+  // If no user after loading, redirect to login
+  if (!user) {
+    navigate('/login');
+    return null;
+  }
+
+  const isOwner = user.role === 'owner';
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
@@ -181,9 +187,7 @@ export default function OrganizationSettings() {
           </div>
 
           <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Slug
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Slug</label>
             <input
               type="text"
               value={orgSlug}
@@ -191,15 +195,11 @@ export default function OrganizationSettings() {
               className="w-full px-3 py-2 border border-gray-300 rounded-md"
               disabled={!isOwner}
             />
-            <p className="text-sm text-gray-500 mt-1">
-              Used in URLs and API calls
-            </p>
+            <p className="text-sm text-gray-500 mt-1">Used in URLs and API calls</p>
           </div>
 
           <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Tier
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Tier</label>
             <input
               type="text"
               value={org?.tier || ''}
@@ -239,16 +239,18 @@ export default function OrganizationSettings() {
           ) : apiKeys?.length > 0 ? (
             <div className="space-y-3">
               {apiKeys.map((key: any) => (
-                <div key={key.id} className="flex justify-between items-center p-3 bg-gray-50 rounded">
+                <div
+                  key={key.id}
+                  className="flex justify-between items-center p-3 bg-gray-50 rounded"
+                >
                   <div>
                     <div className="font-medium">{key.name}</div>
                     <div className="text-sm text-gray-500">
                       Created: {new Date(key.createdAt).toLocaleDateString()}
-                      {key.expiresAt && ` | Expires: ${new Date(key.expiresAt).toLocaleDateString()}`}
+                      {key.expiresAt &&
+                        ` | Expires: ${new Date(key.expiresAt).toLocaleDateString()}`}
                     </div>
-                    <div className="text-sm font-mono text-gray-400">
-                      {key.prefix}...
-                    </div>
+                    <div className="text-sm font-mono text-gray-400">{key.prefix}...</div>
                   </div>
                   {isOwner && (
                     <button
@@ -371,9 +373,7 @@ export default function OrganizationSettings() {
             ) : (
               <form onSubmit={handleCreateKey} className="p-4">
                 <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Key Name
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Key Name</label>
                   <input
                     type="text"
                     value={newKeyName}
@@ -432,8 +432,8 @@ export default function OrganizationSettings() {
             </div>
             <div className="p-4">
               <p className="text-gray-600 mb-4">
-                Are you sure you want to delete this organization? This action cannot be undone.
-                All data, including dashboards, analytics, and team members will be permanently deleted.
+                Are you sure you want to delete this organization? This action cannot be undone. All
+                data, including dashboards, analytics, and team members will be permanently deleted.
               </p>
               <div className="flex justify-end gap-2">
                 <button
@@ -445,6 +445,8 @@ export default function OrganizationSettings() {
                 <button
                   onClick={handleDeleteOrg}
                   disabled={deleteOrgMutation.isPending}
+                  name="deleteOrganizationButton"
+                  role="button"
                   className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 disabled:opacity-50"
                 >
                   {deleteOrgMutation.isPending ? 'Deleting...' : 'Delete Organization'}
@@ -467,20 +469,28 @@ export default function OrganizationSettings() {
                 Select a member to transfer ownership to. You will become an admin after transfer.
               </p>
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                  htmlFor="newOwnerSelect"
+                  id="newOwnerSelectLabel"
+                >
                   New Owner
                 </label>
                 <select
                   value={transferUserId}
                   onChange={(e) => setTransferUserId(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  id="newOwnerSelect"
+                  aria-labelledby="newOwnerSelectLabel"
                 >
                   <option value="">Select a member</option>
-                  {members?.filter((m: any) => m.id !== user?.id).map((member: any) => (
-                    <option key={member.id} value={member.id}>
-                      {member.name} ({member.email})
-                    </option>
-                  ))}
+                  {members
+                    ?.filter((m: any) => m.id !== user?.id)
+                    .map((member: any) => (
+                      <option key={member.id} value={member.id}>
+                        {member.name} ({member.email})
+                      </option>
+                    ))}
                 </select>
               </div>
               <div className="flex justify-end gap-2">

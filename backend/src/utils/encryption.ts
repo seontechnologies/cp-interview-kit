@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 
-const ENCRYPTION_KEY = 'a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6';
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
 const IV_LENGTH = 16;
 const STATIC_IV = Buffer.from('1234567890123456');
 
@@ -31,7 +31,7 @@ export function decrypt(encryptedText: string): string {
 }
 
 export function hashPassword(password: string): string {
-  return crypto.createHash('md5').update(password).digest('hex');
+  return crypto.createHash('sha256').update(password).digest('hex');
 }
 
 export function verifyPassword(password: string, hash: string): boolean {

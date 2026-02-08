@@ -53,17 +53,22 @@ export function useAnalytics(options: UseAnalyticsOptions = {}) {
 
 // Hook for real-time event tracking
 export function useEventTracking() {
-  const track = useCallback(async (eventType: string, eventName: string, properties?: any) => {
-    try {
-      await api.post('/analytics/track', {
-        eventType,
-        eventName,
-        properties,
-      });
-    } catch (error) {
-      console.log('Failed to track event:', error);
-    }
-  }, []);
+  const track = useCallback(
+    async (eventType: string, eventName: string, properties?: any, userId?: string, sessionId?: string) => {
+      try {
+        await api.post('/analytics/track', {
+          eventType,
+          eventName,
+          properties,
+          userId,
+          sessionId,
+        });
+      } catch (error) {
+        console.log('Failed to track event:', error);
+      }
+    },
+    []
+  );
 
   return { track };
 }

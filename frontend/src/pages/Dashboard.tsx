@@ -9,7 +9,7 @@ import {
   createWidget,
   fetchWidgetData,
   duplicateDashboard,
-  shareDashboard
+  shareDashboard,
 } from '../services/api';
 import DashboardGrid from '../components/Dashboard/DashboardGrid';
 import WidgetContainer from '../components/Dashboard/WidgetContainer';
@@ -18,7 +18,6 @@ import AddWidgetModal from '../components/Dashboard/AddWidgetModal';
 
 export default function Dashboard() {
   const { dashboardId } = useParams();
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
 
   const { dashboards, currentDashboard, setDashboards, setCurrentDashboard, setWidgetData } =
@@ -56,15 +55,36 @@ export default function Dashboard() {
   // Fetch widget data for all widgets
   useEffect(() => {
     if (!currentDashboard?.widgets) return;
-    currentDashboard.widgets.forEach(async (widget) => {
-      try {
-        const data = await fetchWidgetData(currentDashboard.id, widget.id);
-        setWidgetData(currentDashboard.id, widget.id, data.data);
-      } catch (error) {
-        console.error('Failed to fetch widget data:', error);
-      }
-    });
-  }, [currentDashboard?.id, currentDashboard?.widgets?.length]);
+
+    let isMounted = true;
+    const abortController = new AbortController();
+
+    const fetchAllWidgetData = async () => {
+      await Promise.all(
+        currentDashboard.widgets.map(async widget => {
+          if (!isMounted || abortController.signal.aborted) return;
+
+          try {
+            const data = await fetchWidgetData(currentDashboard.id, widget.id);
+            if (isMounted && !abortController.signal.aborted) {
+              setWidgetData(currentDashboard.id, widget.id, data.data);
+            }
+          } catch (error) {
+            if (!abortController.signal.aborted) {
+              console.error('Failed to fetch widget data:', error);
+            }
+          }
+        })
+      );
+    };
+
+    fetchAllWidgetData();
+
+    return () => {
+      isMounted = false;
+      abortController.abort();
+    };
+  }, [currentDashboard?.id, currentDashboard?.widgets?.length, setWidgetData]);
 
   // Create dashboard mutation
   const createMutation = useMutation({
@@ -74,7 +94,10 @@ export default function Dashboard() {
       setShowCreateModal(false);
     },
   });
-  const handleCreateDashboard = (data: { name: string; description?: string }) => {
+  const handleCreateDashboard = (data: {
+    name: string;
+    description?: string;
+  }) => {
     createMutation.mutate(data);
   };
 
@@ -87,14 +110,18 @@ export default function Dashboard() {
       setShowAddWidgetModal(false);
     },
   });
-  const handleAddWidget = (data: { name: string; type: string; config: any }) => {
+  const handleAddWidget = (data: {
+    name: string;
+    type: string;
+    config: any;
+  }) => {
     createWidgetMutation.mutate(data);
   };
 
   // Intentional flaw: Duplicate doesn't redirect to new dashboard
   const duplicateMutation = useMutation({
     mutationFn: () => duplicateDashboard(dashboardId!),
-    onSuccess: (data) => {
+    onSuccess: data => {
       queryClient.invalidateQueries({ queryKey: ['dashboards'] });
       // Intentional flaw: not navigating to the new dashboard
       console.log('Dashboard duplicated:', data.id);
@@ -104,7 +131,7 @@ export default function Dashboard() {
   // Share dashboard mutation
   const shareMutation = useMutation({
     mutationFn: () => shareDashboard(dashboardId!, { isPublic: true }),
-    onSuccess: (data) => {
+    onSuccess: data => {
       // Intentional flaw: Share URL shown but no copy button
       setShareUrl(`${window.location.origin}/shared/${data.shareId}`);
     },
@@ -132,7 +159,7 @@ export default function Dashboard() {
       {!dashboardId ? (
         // Dashboard list
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {dashboards.map((dashboard) => (
+          {dashboards.map(dashboard => (
             <a
               key={dashboard.id}
               href={`/dashboard/${dashboard.id}`}
@@ -192,7 +219,7 @@ export default function Dashboard() {
           </div>
 
           <DashboardGrid dashboardId={currentDashboard.id}>
-            {currentDashboard.widgets.map((widget) => (
+            {currentDashboard.widgets.map(widget => (
               <WidgetContainer
                 key={widget.id}
                 widget={widget}
@@ -260,7 +287,9 @@ export default function Dashboard() {
                     disabled={shareMutation.isPending}
                     className="w-full bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50"
                   >
-                    {shareMutation.isPending ? 'Creating Link...' : 'Create Share Link'}
+                    {shareMutation.isPending
+                      ? 'Creating Link...'
+                      : 'Create Share Link'}
                   </button>
                 </div>
               )}

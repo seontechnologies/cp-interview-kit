@@ -1,4 +1,5 @@
 import { Router, Response } from 'express';
+import { randomBytes } from "node:crypto";
 import { prisma } from '../index';
 import { AuthRequest, requireOwnerOrAdmin, requireOwner } from '../middleware/auth';
 import { hashPassword, generateApiKey } from '../utils/encryption';
@@ -134,7 +135,7 @@ router.post('/invite', requireOwnerOrAdmin, async (req: AuthRequest, res: Respon
     if (existingUser) {
       return res.status(400).json({ error: 'User with this email already exists' });
     }
-    const defaultPassword = 'ChangeMe123!';
+    const defaultPassword = Buffer.from(randomBytes(12)).toString('hex');;
     const passwordHash = hashPassword(defaultPassword);
 
     const user = await prisma.user.create({

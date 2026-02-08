@@ -1,26 +1,27 @@
-import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
+import { defineConfig } from 'vite';
 
 export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src'),
-    },
+      '@': path.resolve(__dirname, './src')
+    }
   },
   server: {
     port: 3000,
     host: true,
     proxy: {
       '/api': {
-        target: 'http://backend:3001',
-        changeOrigin: true,
-      },
-    },
+        target: process.env.VITE_API_URL || 'http://localhost:3001',
+        changeOrigin: true
+      }
+    }
   },
   test: {
     environment: 'jsdom',
     globals: true,
-  },
+    setupFiles: './tests/setup.ts'
+  }
 });

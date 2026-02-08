@@ -1,13 +1,83 @@
-import { Router, Request, Response } from 'express';
+import { Request, Response, Router } from 'express';
+import { v4 as uuidv4 } from 'uuid';
 import { prisma } from '../index';
 import { generateToken } from '../middleware/auth';
-import { hashPassword, verifyPassword, generateToken as generateRandomToken } from '../utils/encryption';
-import { validate, loginSchema, registerSchema } from '../middleware/validate';
 import { authRateLimiter } from '../middleware/rateLimit';
-import { v4 as uuidv4 } from 'uuid';
+import { loginSchema, registerSchema, validate } from '../middleware/validate';
+import { generateToken as generateRandomToken, hashPassword, verifyPassword } from '../utils/encryption';
 
 const router = Router();
 
+/**
+ * @openapi
+ * /api/auth/login:
+ *   post:
+ *     summary: User login
+ *     description: Authenticate a user and receive a JWT token
+ *     tags:
+ *       - Authentication
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - password
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: user@example.com
+ *               password:
+ *                 type: string
+ *                 format: password
+ *                 example: SecurePass123!
+ *     responses:
+ *       200:
+ *         description: Login successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 token:
+ *                   type: string
+ *                 user:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: string
+ *                     email:
+ *                       type: string
+ *                     name:
+ *                       type: string
+ *                     role:
+ *                       type: string
+ *                     organizationId:
+ *                       type: string
+ *                     organization:
+ *                       type: object
+ *                       properties:
+ *                         id:
+ *                           type: string
+ *                         name:
+ *                           type: string
+ *                         slug:
+ *                           type: string
+ *                         tier:
+ *                           type: string
+ *                     lastLoginAt:
+ *                       type: string
+ *                       format: date-time
+ *       401:
+ *         description: Invalid credentials
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 // Login endpoint
 router.post('/login', authRateLimiter, validate(loginSchema), async (req: Request, res: Response) => {
   try {
@@ -43,7 +113,7 @@ router.post('/login', authRateLimiter, validate(loginSchema), async (req: Reques
         id: uuidv4(),
         userId: user.id,
         token: sessionToken,
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000), // 1 hour
         userAgent: req.headers['user-agent'],
         ipAddress: req.ip
       }
@@ -64,7 +134,6 @@ router.post('/login', authRateLimiter, validate(loginSchema), async (req: Reques
           slug: user.organization.slug,
           tier: user.organization.tier
         },
-        passwordHash: user.passwordHash,
         lastLoginAt: user.lastLoginAt
       }
     });
