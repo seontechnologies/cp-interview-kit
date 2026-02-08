@@ -119,8 +119,7 @@ export function useDashboardSync(dashboardId: string | undefined) {
         message.type === 'dashboard_update' &&
         message.data?.dashboardId === dashboardId
       ) {
-        updates.push(message.data);
-        setUpdates(updates);
+        setUpdates((prev) => [...prev, message.data]);
       }
     });
 
