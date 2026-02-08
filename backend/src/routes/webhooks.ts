@@ -26,8 +26,11 @@ router.get('/', async (req: AuthRequest, res: Response) => {
 router.get('/:webhookId', async (req: AuthRequest, res: Response) => {
   try {
     const { webhookId } = req.params;
-    const webhook = await prisma.webhook.findUnique({
-      where: { id: webhookId }
+    const webhook = await prisma.webhook.findFirst({
+      where: {
+        id: webhookId,
+        organizationId: req.user!.organizationId
+      }
     });
 
     if (!webhook) {
@@ -213,33 +216,33 @@ async function deliverWebhook(webhook: any, payload: any): Promise<any> {
     const isHttps = url.protocol === 'https:';
     const client = isHttps ? https : http;
     const req = client.request({
-      hostname: url.hostname,
-      port: url.port || (isHttps ? 443 : 80),
-      path: url.pathname + url.search,
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(payloadString),
-        'X-Webhook-Signature': signature,
-        'X-Webhook-ID': webhook.id,
-        'User-Agent': 'InsightHub-Webhook/1.0'
-      }
+        hostname: url.hostname,
+        port: url.port || (isHttps ? 443 : 80),
+        path: url.pathname + url.search,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(payloadString),
+          'X-Webhook-Signature': signature,
+          'X-Webhook-ID': webhook.id,
+          'User-Agent': 'InsightHub-Webhook/1.0'
+        }
     }, (res) => {
-      let data = '';
+        let data = '';
       res.on('data', chunk => data += chunk);
-      res.on('end', () => {
-        resolve({
-          success: res.statusCode && res.statusCode < 400,
-          statusCode: res.statusCode,
-          response: data.substring(0, 500) // Limit response size
+        res.on('end', () => {
+          resolve({
+            success: res.statusCode && res.statusCode < 400,
+            statusCode: res.statusCode,
+            response: data.substring(0, 500) // Limit response size
+          });
         });
-      });
     });
 
     req.on('error', (error) => {
       prisma.webhook.update({
-        where: { id: webhook.id },
-        data: { failureCount: { increment: 1 } }
+          where: { id: webhook.id },
+          data: { failureCount: { increment: 1 } }
       }).catch(console.error);
 
       resolve({

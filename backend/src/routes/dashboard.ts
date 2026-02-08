@@ -1,14 +1,38 @@
-import { Router, Response } from 'express';
-import { prisma } from '../index';
-import { AuthRequest, requireOwnerOrAdmin } from '../middleware/auth';
-import { validate, createDashboardSchema, createWidgetSchema } from '../middleware/validate';
-import { cache, cacheKeys } from '../utils/cache';
-import { broadcastToOrg } from '../index';
+import { Response, Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
+import { broadcastToOrg, prisma } from '../index';
+import { AuthRequest } from '../middleware/auth';
+import { createDashboardSchema, createWidgetSchema, validate } from '../middleware/validate';
+import { cache, cacheKeys } from '../utils/cache';
 
 const router = Router();
 
-// Get all dashboards for organization
+/**
+ * @openapi
+ * /api/dashboards:
+ *   get:
+ *     summary: Get all dashboards
+ *     description: Retrieve all dashboards for the authenticated user's organization
+ *     tags:
+ *       - Dashboards
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of dashboards
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/Dashboard'
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 router.get('/', async (req: AuthRequest, res: Response) => {
   try {
     const dashboards = await prisma.dashboard.findMany({
@@ -31,6 +55,40 @@ router.get('/', async (req: AuthRequest, res: Response) => {
   }
 });
 
+/**
+ * @openapi
+ * /api/dashboards/{dashboardId}:
+ *   get:
+ *     summary: Get dashboard by ID
+ *     description: Retrieve a single dashboard with all its widgets
+ *     tags:
+ *       - Dashboards
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: dashboardId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Dashboard ID
+ *     responses:
+ *       200:
+ *         description: Dashboard details
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Dashboard'
+ *       404:
+ *         description: Dashboard not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Server error
+ */
 // Get single dashboard with widgets
 router.get('/:dashboardId', async (req: AuthRequest, res: Response) => {
   try {
@@ -62,6 +120,48 @@ router.get('/:dashboardId', async (req: AuthRequest, res: Response) => {
   }
 });
 
+/**
+ * @openapi
+ * /api/dashboards:
+ *   post:
+ *     summary: Create a new dashboard
+ *     description: Create a new dashboard for the authenticated user's organization
+ *     tags:
+ *       - Dashboards
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - name
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 description: Dashboard name
+ *                 example: Sales Dashboard
+ *               description:
+ *                 type: string
+ *                 description: Dashboard description
+ *                 example: Track sales metrics and KPIs
+ *               layout:
+ *                 type: string
+ *                 enum: [grid, flex]
+ *                 default: grid
+ *                 description: Dashboard layout type
+ *     responses:
+ *       201:
+ *         description: Dashboard created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Dashboard'
+ *       500:
+ *         description: Server error
+ */
 // Create dashboard
 router.post('/', validate(createDashboardSchema), async (req: AuthRequest, res: Response) => {
   try {
@@ -109,6 +209,54 @@ router.post('/', validate(createDashboardSchema), async (req: AuthRequest, res: 
   }
 });
 
+/**
+ * @openapi
+ * /api/dashboards/{dashboardId}:
+ *   put:
+ *     summary: Update dashboard
+ *     description: Update an existing dashboard's properties
+ *     tags:
+ *       - Dashboards
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: dashboardId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Dashboard ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *               description:
+ *                 type: string
+ *               layout:
+ *                 type: string
+ *                 enum: [grid, flex]
+ *               settings:
+ *                 type: object
+ *               isPublic:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: Dashboard updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Dashboard'
+ *       404:
+ *         description: Dashboard not found
+ *       500:
+ *         description: Server error
+ */
 // Update dashboard
 router.put('/:dashboardId', async (req: AuthRequest, res: Response) => {
   try {
@@ -193,6 +341,73 @@ router.delete('/:dashboardId', async (req: AuthRequest, res: Response) => {
   }
 });
 
+/**
+ * @openapi
+ * /api/dashboards/{dashboardId}/widgets:
+ *   post:
+ *     summary: Add widget to dashboard
+ *     description: Create a new widget and add it to a dashboard
+ *     tags:
+ *       - Widgets
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: dashboardId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Dashboard ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - name
+ *               - type
+ *               - dataSource
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 example: Total Sales
+ *               type:
+ *                 type: string
+ *                 enum: [metric, chart, table]
+ *                 example: metric
+ *               config:
+ *                 type: object
+ *               position:
+ *                 type: object
+ *                 properties:
+ *                   x:
+ *                     type: number
+ *                   y:
+ *                     type: number
+ *                   w:
+ *                     type: number
+ *                   h:
+ *                     type: number
+ *               dataSource:
+ *                 type: string
+ *                 example: analytics_events
+ *               refreshInterval:
+ *                 type: number
+ *                 default: 300
+ *     responses:
+ *       201:
+ *         description: Widget created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Widget'
+ *       404:
+ *         description: Dashboard not found
+ *       500:
+ *         description: Server error
+ */
 // Add widget to dashboard
 router.post('/:dashboardId/widgets', validate(createWidgetSchema), async (req: AuthRequest, res: Response) => {
   try {
@@ -319,8 +534,12 @@ router.get('/:dashboardId/widgets/:widgetId/data', async (req: AuthRequest, res:
       return res.status(404).json({ error: 'Dashboard not found' });
     }
 
-    const widget = await prisma.widget.findUnique({
-      where: { id: widgetId }
+    const widget = await prisma.widget.findFirst({
+      where: {
+        id: widgetId,
+        dashboardId: dashboardId,
+        organizationId: req.user!.organizationId
+      }
     });
 
     if (!widget) {
@@ -337,10 +556,10 @@ router.get('/:dashboardId/widgets/:widgetId/data', async (req: AuthRequest, res:
           where: {
             organizationId: req.user!.organizationId,
             ...(startDate && endDate ? {
-              timestamp: {
-                gte: new Date(startDate as string),
-                lte: new Date(endDate as string)
-              }
+                  timestamp: {
+                    gte: new Date(startDate as string),
+                    lte: new Date(endDate as string)
+                  }
             } : {})
           }
         });

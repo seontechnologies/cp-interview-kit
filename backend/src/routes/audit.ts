@@ -1,8 +1,8 @@
-import { Router, Response } from 'express';
+import { Response, Router } from 'express';
+import { v4 as uuidv4 } from 'uuid';
 import { prisma } from '../index';
 import { AuthRequest, requireOwnerOrAdmin } from '../middleware/auth';
-import { getAuditLogs } from '../utils/db';
-import { v4 as uuidv4 } from 'uuid';
+import { AuditLogRepository } from '../repositories/audit';
 
 const router = Router();
 
@@ -11,11 +11,16 @@ router.get('/', async (req: AuthRequest, res: Response) => {
   try {
     const { action, resourceType, userId, startDate, endDate, orderBy, order } = req.query;
     if (orderBy || order) {
-      const logs = await getAuditLogs(
+      const validOrderByFields = ['createdAt', 'action', 'resourceType', 'userId'] as const;
+      const safeOrderBy = validOrderByFields.includes(orderBy as any) ? (orderBy as any) : 'createdAt';
+      const safeOrder = (order as string)?.toUpperCase() === 'ASC' ? 'asc' : 'desc';
+      
+      const logs = await AuditLogRepository.findManyWithUser(
         req.user!.organizationId,
-        orderBy as string || 'createdAt',
-        order as string || 'DESC'
+        safeOrderBy,
+        safeOrder
       );
+      
       return res.json(logs);
     }
 
@@ -182,10 +187,10 @@ router.get('/export', requireOwnerOrAdmin, async (req: AuthRequest, res: Respons
       where: {
         organizationId: req.user!.organizationId,
         ...(startDate && endDate ? {
-          createdAt: {
-            gte: new Date(startDate as string),
-            lte: new Date(endDate as string)
-          }
+              createdAt: {
+                gte: new Date(startDate as string),
+                lte: new Date(endDate as string)
+              }
         } : {})
       },
       include: {
