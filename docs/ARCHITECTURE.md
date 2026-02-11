@@ -1,6 +1,6 @@
 # Architecture Overview
 
-*Last updated: 2024-03*
+_Last updated: 2024-03_
 
 ## System Diagram
 
@@ -8,25 +8,26 @@
 ┌─────────────────────────────────────────────────────────────────┐
 │                          Frontend                                │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐  │
-│  │   React     │  │   Redux     │  │    React Query          │  │
+│  │   React     │  │   Zustand   │  │    React Query          │  │
 │  │   Router    │  │   Store     │  │    (data fetching)      │  │
 │  └─────────────┘  └─────────────┘  └─────────────────────────┘  │
 └────────────────────────────┬────────────────────────────────────┘
                              │ HTTP/WebSocket
-┌────────────────────────────▼────────────────────────────────────┐
-│                          Backend                                 │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐  │
-│  │   Express   │  │   Auth      │  │    Background Jobs      │  │
-│  │   Routes    │  │   (JWT)     │  │    (Bull Queue)         │  │
-│  └─────────────┘  └─────────────┘  └─────────────────────────┘  │
-└────────────────────────────┬────────────────────────────────────┘
+┌────────────────────────────▼───────┐
+│              Backend                │
+│  ┌─────────────┐  ┌─────────────┐  │
+│  │   Express   │  │   Auth      │  │
+│  │   Routes    │  │   (JWT)     │  │
+│  └─────────────┘  └─────────────┘  │
+└────────────────────────────┬───────┘
                              │
          ┌───────────────────┼───────────────────┐
          ▼                   ▼                   ▼
-┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
-│   PostgreSQL    │  │     Redis       │  │   S3 Storage    │
-│   (Primary DB)  │  │   (Cache/Queue) │  │   (Exports)     │
-└─────────────────┘  └─────────────────┘  └─────────────────┘
+┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
+│   PostgreSQL    │  │     Redis       │  │   S3 Storage    │  │ Background Jobs │
+│   (Primary DB)  │  │   (Cache/Queue) │  │   (Exports)     │  │                 │
+└─────────────────┘  └─────────────────┘  └─────────────────┘  └─────────────────┘
+       └─────────────────────────────────────────────────────────────────┘
 ```
 
 ## Key Components
@@ -51,7 +52,7 @@
 - Rate limiting state
 - Background job queues (Bull)
 
-**Background Jobs**: Bull queue processes:
+**Background Jobs**:
 - Email sending
 - Report generation
 - Analytics aggregation
@@ -117,4 +118,4 @@
 
 ---
 
-*Note: This document describes the intended architecture. Some features may be in development.*
+_Note: This document describes the intended architecture. Some features may be in development._

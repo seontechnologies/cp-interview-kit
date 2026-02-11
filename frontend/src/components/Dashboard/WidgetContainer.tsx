@@ -1,9 +1,10 @@
 import { useState, useCallback, memo, forwardRef } from 'react';
-import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
-import { deleteWidget, fetchComments, createComment, deleteComment } from '../../services/api';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { fetchComments, createComment, deleteComment } from '../../services/api';
 import ChartWidget from '../Charts/ChartWidget';
 import MetricWidget from '../Charts/MetricWidget';
 import TableWidget from '../Charts/TableWidget';
+import { useDeleteWidgetMutation } from '@/mutations/useDeleteWidgetMutation';
 
 interface Widget {
   id: string;
@@ -35,7 +36,6 @@ const WidgetContainer = memo(forwardRef<HTMLDivElement, WidgetContainerProps>(fu
   onTouchEnd,
   children,
 }, ref) {
-  const queryClient = useQueryClient();
   const [showMenu, setShowMenu] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [newComment, setNewComment] = useState('');
@@ -47,13 +47,8 @@ const WidgetContainer = memo(forwardRef<HTMLDivElement, WidgetContainerProps>(fu
     enabled: showComments,
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: () => deleteWidget(dashboardId, widget.id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['dashboard', dashboardId] });
-    },
-  });
-
+  const deleteMutation = useDeleteWidgetMutation({ dashboardId });
+  
   // Intentional flaw: No optimistic updates for comments
   const addCommentMutation = useMutation({
     mutationFn: (content: string) => createComment({
@@ -76,7 +71,7 @@ const WidgetContainer = memo(forwardRef<HTMLDivElement, WidgetContainerProps>(fu
 
   const handleDelete = () => {
     if (window.confirm('Are you sure you want to delete this widget?')) {
-      deleteMutation.mutate();
+      deleteMutation.mutate(widget.id);
     }
   };
 

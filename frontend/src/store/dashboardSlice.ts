@@ -31,7 +31,11 @@ interface DashboardState {
   updateDashboard: (id: string, updates: Partial<Dashboard>) => void;
 
   addWidget: (dashboardId: string, widget: Widget) => void;
-  updateWidget: (dashboardId: string, widgetId: string, updates: Partial<Widget>) => void;
+  updateWidget: (
+    dashboardId: string,
+    widgetId: string,
+    updates: Partial<Widget>
+  ) => void;
   removeWidget: (dashboardId: string, widgetId: string) => void;
   setWidgetData: (dashboardId: string, widgetId: string, data: any) => void;
   reorderWidgets: (dashboardId: string, widgets: Widget[]) => void;
@@ -56,7 +60,7 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
   removeDashboard: (id) => {
     // This one is correct (creates new array)
     set({
-      dashboards: get().dashboards.filter((d) => d.id !== id),
+      dashboards: get().dashboards.filter((d) => d.id !== id)
     });
   },
 
@@ -101,7 +105,7 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
     const dashboard = dashboards.find((d) => d.id === dashboardId);
 
     if (dashboard) {
-      const widget = dashboard.widgets.find((w) => w.id === widgetId);
+      const widget = dashboard.widgets?.find((w) => w.id === widgetId);
       if (widget) {
         Object.assign(widget, updates);
         set({ dashboards });
@@ -163,5 +167,5 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
     if (current?.id === dashboardId) {
       set({ currentDashboard: { ...current, widgets } });
     }
-  },
+  }
 }));

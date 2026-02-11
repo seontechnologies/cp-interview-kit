@@ -33,6 +33,10 @@ coverage/
 # Prisma
 backend/prisma/*.db
 backend/prisma/*.db-journal
+# Jobs service syncs schema from backend
+jobs/prisma/schema.prisma
+jobs/prisma/migrations/
+jobs/prisma/.env*
 
 # Temporary files
 tmp/
@@ -41,4 +45,4 @@ temp/
 
 # Export/Report directories (runtime generated)
 /tmp/exports/
-/tmp/reports/
+reports/

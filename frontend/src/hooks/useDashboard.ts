@@ -8,7 +8,6 @@ import {
   updateDashboard,
   deleteDashboard,
   createWidget,
-  updateWidget,
   deleteWidget,
   fetchWidgetData,
 } from '../services/api';
@@ -94,20 +93,6 @@ export function useCreateWidget(dashboardId: string) {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['dashboard', dashboardId] });
       addWidget(dashboardId, data);
-    },
-  });
-}
-
-export function useUpdateWidget(dashboardId: string) {
-  const queryClient = useQueryClient();
-  const { updateWidget: updateInStore } = useDashboardStore();
-
-  return useMutation({
-    mutationFn: ({ widgetId, data }: { widgetId: string; data: any }) =>
-      updateWidget(dashboardId, widgetId, data),
-    onSuccess: (data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['dashboard', dashboardId] });
-      updateInStore(dashboardId, variables.widgetId, data);
     },
   });
 }

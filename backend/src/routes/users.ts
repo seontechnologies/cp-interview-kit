@@ -82,10 +82,14 @@ router.put('/me/password', async (req: AuthRequest, res: Response) => {
     const { currentPassword, newPassword } = req.body;
 
     if (!currentPassword || !newPassword) {
-      return res.status(400).json({ error: 'Current and new password required' });
+      return res
+        .status(400)
+        .json({ error: 'Current and new password required' });
     }
     if (newPassword.length < 6) {
-      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+      return res
+        .status(400)
+        .json({ error: 'Password must be at least 6 characters' });
     }
 
     const user = await prisma.user.findUnique({
@@ -96,10 +100,10 @@ router.put('/me/password', async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    if (!verifyPassword(currentPassword, user.passwordHash)) {
+    if (!(await verifyPassword(currentPassword, user.passwordHash))) {
       return res.status(400).json({ error: 'Current password is incorrect' });
     }
-    const newPasswordHash = hashPassword(newPassword);
+    const newPasswordHash = await hashPassword(newPassword);
 
     await prisma.user.update({
       where: { id: req.user!.id },
@@ -217,20 +221,23 @@ router.get('/me/sessions', async (req: AuthRequest, res: Response) => {
 });
 
 // Revoke session
-router.delete('/me/sessions/:sessionId', async (req: AuthRequest, res: Response) => {
-  try {
-    const { sessionId } = req.params;
-    // Could revoke other users' sessions!
-    await prisma.session.delete({
-      where: { id: sessionId }
-    });
+router.delete(
+  '/me/sessions/:sessionId',
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { sessionId } = req.params;
+      // Could revoke other users' sessions!
+      await prisma.session.delete({
+        where: { id: sessionId }
+      });
 
-    res.json({ message: 'Session revoked' });
-  } catch (error) {
-    console.error('Revoke session error:', error);
-    res.status(500).json({ error: 'Failed to revoke session' });
+      res.json({ message: 'Session revoked' });
+    } catch (error) {
+      console.error('Revoke session error:', error);
+      res.status(500).json({ error: 'Failed to revoke session' });
+    }
   }
-});
+);
 
 // Revoke all sessions
 router.delete('/me/sessions', async (req: AuthRequest, res: Response) => {
@@ -242,9 +249,11 @@ router.delete('/me/sessions', async (req: AuthRequest, res: Response) => {
     await prisma.session.deleteMany({
       where: {
         userId: req.user!.id,
-        ...(keepCurrent === 'true' && currentToken ? {
-          token: { not: currentToken }
-        } : {})
+        ...(keepCurrent === 'true' && currentToken
+          ? {
+              token: { not: currentToken }
+            }
+          : {})
       }
     });
 
@@ -308,7 +317,7 @@ router.delete('/me', async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    if (!verifyPassword(password, user.passwordHash)) {
+    if (!(await verifyPassword(password, user.passwordHash))) {
       return res.status(400).json({ error: 'Incorrect password' });
     }
 
@@ -324,7 +333,8 @@ router.delete('/me', async (req: AuthRequest, res: Response) => {
 
       if (ownerCount <= 1) {
         return res.status(400).json({
-          error: 'Cannot delete account. You are the only owner. Transfer ownership first.'
+          error:
+            'Cannot delete account. You are the only owner. Transfer ownership first.'
         });
       }
     }

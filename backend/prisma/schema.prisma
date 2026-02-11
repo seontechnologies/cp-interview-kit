@@ -203,19 +203,6 @@ model Comment {
   updatedAt       DateTime @updatedAt
 }
 
-model EmailQueue {
-  id              String   @id @default(uuid())
-  to              String
-  subject         String
-  body            String
-  status          String   @default("pending") // pending, sent, failed
-  attempts        Int      @default(0)
-  lastError       String?
-  scheduledFor    DateTime @default(now())
-  sentAt          DateTime?
-  createdAt       DateTime @default(now())
-}
-
 model UsageRecord {
   id              String   @id @default(uuid())
   organizationId  String

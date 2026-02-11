@@ -24,8 +24,8 @@ jest.mock('../src/index', () => ({
 }));
 
 jest.mock('../src/utils/encryption', () => ({
-  hashPassword: jest.fn(() => 'hashed_password'),
-  verifyPassword: jest.fn(() => true),
+  hashPassword: jest.fn(async () => 'hashed_password'),
+  verifyPassword: jest.fn(async () => true),
   generateToken: jest.fn(() => 'random_token')
 }));
 
@@ -50,7 +50,9 @@ describe('Auth Routes', () => {
         organization: { id: 'org-1', name: 'Test Org' }
       });
 
-      const user = await mockPrisma.user.findUnique({ where: { email: 'test@example.com' } });
+      const user = await mockPrisma.user.findUnique({
+        where: { email: 'test@example.com' }
+      });
 
       expect(user).toBeDefined();
       expect(user.email).toBe('test@example.com');
@@ -59,7 +61,9 @@ describe('Auth Routes', () => {
     it('should reject invalid credentials', async () => {
       mockPrisma.user.findUnique.mockResolvedValue(null);
 
-      const user = await mockPrisma.user.findUnique({ where: { email: 'invalid@example.com' } });
+      const user = await mockPrisma.user.findUnique({
+        where: { email: 'invalid@example.com' }
+      });
 
       expect(user).toBeNull();
     });
@@ -115,14 +119,13 @@ describe('Auth Routes', () => {
       const result = jwt.verify('any_token', 'any_secret');
       expect(result.userId).toBe('user-1');
     });
-    it('should reject expired token', () => {
-    });
+    it('should reject expired token', () => {});
   });
 
   describe('Password hashing', () => {
-    it('should hash password correctly', () => {
+    it('should hash password correctly', async () => {
       const { hashPassword } = require('../src/utils/encryption');
-      const hash = hashPassword('any_password');
+      const hash = await hashPassword('any_password');
       expect(hash).toBe('hashed_password');
     });
   });

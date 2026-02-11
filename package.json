@@ -5,12 +5,14 @@
   "workspaces": [
     "backend",
     "frontend",
-    "shared"
+    "shared",
+    "jobs"
   ],
   "scripts": {
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
     "dev:backend": "npm run dev --workspace=backend",
     "dev:frontend": "npm run dev --workspace=frontend",
+    "dev:jobs": "npm run dev --workspace=jobs",
     "build": "npm run build --workspaces",
     "test": "npm run test --workspaces",
     "lint": "npm run lint --workspaces"

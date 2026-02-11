@@ -16,18 +16,18 @@ import webhooksRoutes from './routes/webhooks';
 
 import { authMiddleware } from './middleware/auth';
 import { rateLimiter } from './middleware/rateLimit';
-import { startNotificationJob } from './jobs/notifications';
-import { startReportJob } from './jobs/reports';
 
 const app = express();
 const server = createServer(app);
 const wss = new WebSocketServer({ server });
 
 export const prisma = new PrismaClient();
-app.use(cors({
-  origin: '*',
-  credentials: true
-}));
+app.use(
+  cors({
+    origin: '*',
+    credentials: true
+  })
+);
 
 app.use(express.json());
 app.use(rateLimiter);
@@ -71,7 +71,7 @@ wss.on('connection', (ws, req) => {
     // Broadcast to all clients in same org
     const message = JSON.parse(data.toString());
     if (message.orgId && wsClients.has(message.orgId)) {
-      wsClients.get(message.orgId)?.forEach(client => {
+      wsClients.get(message.orgId)?.forEach((client) => {
         if (client !== ws && client.readyState === 1) {
           client.send(JSON.stringify(message));
         }
@@ -83,7 +83,7 @@ wss.on('connection', (ws, req) => {
 // Broadcast helper for routes to use
 export function broadcastToOrg(orgId: string, message: object) {
   if (wsClients.has(orgId)) {
-    wsClients.get(orgId)?.forEach(client => {
+    wsClients.get(orgId)?.forEach((client) => {
       if (client.readyState === 1) {
         client.send(JSON.stringify(message));
       }
@@ -92,18 +92,21 @@ export function broadcastToOrg(orgId: string, message: object) {
 }
 
 // Global error handler
-app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  console.error('Unhandled error:', err);
-  res.status(500).json({
-    error: 'Internal server error',
-    message: err.message,
-    stack: err.stack
-  });
-});
-
-// Start background jobs
-startNotificationJob();
-startReportJob();
+app.use(
+  (
+    err: any,
+    req: express.Request,
+    res: express.Response,
+    next: express.NextFunction
+  ) => {
+    console.error('Unhandled error:', err);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: err.message,
+      stack: err.stack
+    });
+  }
+);
 
 const PORT = process.env.PORT || 3001;
 
