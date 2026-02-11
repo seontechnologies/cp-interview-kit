@@ -1,14 +1,16 @@
 import { PrismaClient } from '@prisma/client';
 import { v4 as uuidv4 } from 'uuid';
-import crypto from 'crypto';
+import bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
-function hashPassword(password: string): string {
-  return crypto.createHash('md5').update(password).digest('hex');
+async function hashPassword(password: string): Promise<string> {
+  const SALT_ROUNDS = 12;
+  return bcrypt.hash(password, SALT_ROUNDS);
 }
 
 async function main() {
   console.log('Seeding database...');
+  const hashedPassword = await hashPassword('password123');
 
   // Create demo organization
   const org = await prisma.organization.create({
@@ -18,7 +20,7 @@ async function main() {
       slug: 'demo-company',
       tier: 'pro',
       monthlyBudget: 100.0,
-      currentSpend: 45.50,
+      currentSpend: 45.5,
     },
   });
 
@@ -29,7 +31,7 @@ async function main() {
     data: {
       id: uuidv4(),
       email: 'owner@demo.com',
-      passwordHash: hashPassword('password123'),
+      passwordHash: hashedPassword,
       name: 'Demo Owner',
       role: 'owner',
       organizationId: org.id,
@@ -40,7 +42,7 @@ async function main() {
     data: {
       id: uuidv4(),
       email: 'admin@demo.com',
-      passwordHash: hashPassword('password123'),
+      passwordHash: hashedPassword,
       name: 'Demo Admin',
       role: 'admin',
       organizationId: org.id,
@@ -51,7 +53,7 @@ async function main() {
     data: {
       id: uuidv4(),
       email: 'member@demo.com',
-      passwordHash: hashPassword('password123'),
+      passwordHash: hashedPassword,
       name: 'Demo Member',
       role: 'member',
       organizationId: org.id,
@@ -217,8 +219,20 @@ async function main() {
   console.log('Created widgets');
 
   // Create demo analytics events
-  const eventTypes = ['page_view', 'click', 'form_submit', 'purchase', 'signup'];
-  const eventNames = ['Homepage', 'Product Page', 'Checkout', 'Contact Form', 'Dashboard'];
+  const eventTypes = [
+    'page_view',
+    'click',
+    'form_submit',
+    'purchase',
+    'signup',
+  ];
+  const eventNames = [
+    'Homepage',
+    'Product Page',
+    'Checkout',
+    'Contact Form',
+    'Dashboard',
+  ];
 
   const events = [];
   for (let i = 0; i < 1000; i++) {
@@ -228,7 +242,9 @@ async function main() {
       eventType: eventTypes[Math.floor(Math.random() * eventTypes.length)],
       eventName: eventNames[Math.floor(Math.random() * eventNames.length)],
       properties: { random: Math.random() },
-      timestamp: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000),
+      timestamp: new Date(
+        Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000,
+      ),
       source: 'api',
     });
   }

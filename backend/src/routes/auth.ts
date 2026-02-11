@@ -21,7 +21,7 @@ router.post('/login', authRateLimiter, validate(loginSchema), async (req: Reques
     if (!user) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
-    if (!verifyPassword(password, user.passwordHash)) {
+    if (!(await verifyPassword(password, user.passwordHash))) {
       console.log(`Failed login attempt for ${email} from ${req.ip}`);
       return res.status(401).json({ error: 'Invalid credentials' });
     }
@@ -87,7 +87,7 @@ router.post('/register', authRateLimiter, validate(registerSchema), async (req: 
     if (existingUser) {
       return res.status(400).json({ error: 'Email already registered' });
     }
-    const passwordHash = hashPassword(password);
+    const passwordHash = await hashPassword(password);
 
     let organization;
 

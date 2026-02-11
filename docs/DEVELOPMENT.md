@@ -19,20 +19,14 @@ npm install  # Installs all workspace dependencies
 
 ### 2. Environment Configuration
 
-Copy the example environment file:
+Copy the example environment files:
 
 ```bash
 cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env
 ```
 
-Required environment variables:
-
-| Variable | Description | Example |
-|----------|-------------|---------|
-| DATABASE_URL | PostgreSQL connection string | postgresql://user:pass@localhost:5432/insighthub |
-| REDIS_URL | Redis connection string | redis://localhost:6379 |
-| JWT_SECRET | Secret for signing JWTs | any-long-random-string |
-| ENCRYPTION_KEY | 32-byte key for data encryption | use `openssl rand -hex 32` |
+Please see the respective .env.example file for a list of required environment variables.
 
 ### 3. Database Setup
 
