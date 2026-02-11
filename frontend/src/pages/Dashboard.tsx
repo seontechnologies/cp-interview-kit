@@ -1,16 +1,16 @@
-import { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useState, useEffect } from 'react';
+import { useParams } from 'react-router-dom';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useDashboardStore } from '../store/dashboardSlice';
 import {
-  fetchDashboards,
-  fetchDashboard,
-  createDashboard,
-  createWidget,
   fetchWidgetData,
   duplicateDashboard,
   shareDashboard
 } from '../services/api';
+import { useDashboardsQuery } from '../queries/useDashboardsQuery';
+import { useDashboardQuery } from '../queries/useDashboardQuery';
+import { useCreateDashboardMutation } from '../mutations/useCreateDashboardMutation';
+import { useCreateWidgetMutation } from '../mutations/useCreateWidgetMutation';
 import DashboardGrid from '../components/Dashboard/DashboardGrid';
 import WidgetContainer from '../components/Dashboard/WidgetContainer';
 import CreateDashboardModal from '../components/Dashboard/CreateDashboardModal';
@@ -18,29 +18,26 @@ import AddWidgetModal from '../components/Dashboard/AddWidgetModal';
 
 export default function Dashboard() {
   const { dashboardId } = useParams();
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const { dashboards, currentDashboard, setDashboards, setCurrentDashboard, setWidgetData } =
-    useDashboardStore();
+  const {
+    dashboards,
+    currentDashboard,
+    setDashboards,
+    setCurrentDashboard,
+    setWidgetData
+  } = useDashboardStore();
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showAddWidgetModal, setShowAddWidgetModal] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
 
-  // Fetch all dashboards
-  const { data: dashboardsData, isLoading: loadingDashboards } = useQuery({
-    queryKey: ['dashboards'],
-    queryFn: fetchDashboards,
-  });
+  const { data: dashboardsData, isLoading: loadingDashboards } =
+    useDashboardsQuery();
+  const { data: dashboardData, isLoading: loadingDashboard } =
+    useDashboardQuery(dashboardId);
 
-  // Fetch specific dashboard
-  const { data: dashboardData, isLoading: loadingDashboard } = useQuery({
-    queryKey: ['dashboard', dashboardId],
-    queryFn: () => fetchDashboard(dashboardId!),
-    enabled: !!dashboardId,
-  });
   useEffect(() => {
     if (dashboardsData) {
       setDashboards(dashboardsData);
@@ -67,27 +64,28 @@ export default function Dashboard() {
   }, [currentDashboard?.id, currentDashboard?.widgets?.length]);
 
   // Create dashboard mutation
-  const createMutation = useMutation({
-    mutationFn: createDashboard,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['dashboards'] });
-      setShowCreateModal(false);
-    },
+  const createMutation = useCreateDashboardMutation({
+    onSuccess: () => setShowCreateModal(false)
   });
-  const handleCreateDashboard = (data: { name: string; description?: string }) => {
+
+  const handleCreateDashboard = (data: {
+    name: string;
+    description?: string;
+  }) => {
     createMutation.mutate(data);
   };
 
   // Create widget mutation
-  const createWidgetMutation = useMutation({
-    mutationFn: (data: { name: string; type: string; config: any }) =>
-      createWidget(dashboardId!, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['dashboard', dashboardId] });
-      setShowAddWidgetModal(false);
-    },
+  const createWidgetMutation = useCreateWidgetMutation({
+    dashboardId: dashboardId!,
+    onSuccess: () => setShowAddWidgetModal(false)
   });
-  const handleAddWidget = (data: { name: string; type: string; config: any }) => {
+
+  const handleAddWidget = (data: {
+    name: string;
+    type: string;
+    config: any;
+  }) => {
     createWidgetMutation.mutate(data);
   };
 
@@ -98,7 +96,7 @@ export default function Dashboard() {
       queryClient.invalidateQueries({ queryKey: ['dashboards'] });
       // Intentional flaw: not navigating to the new dashboard
       console.log('Dashboard duplicated:', data.id);
-    },
+    }
   });
 
   // Share dashboard mutation
@@ -107,7 +105,7 @@ export default function Dashboard() {
     onSuccess: (data) => {
       // Intentional flaw: Share URL shown but no copy button
       setShareUrl(`${window.location.origin}/shared/${data.shareId}`);
-    },
+    }
   });
   if (loadingDashboards) {
     return (
@@ -260,7 +258,9 @@ export default function Dashboard() {
                     disabled={shareMutation.isPending}
                     className="w-full bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50"
                   >
-                    {shareMutation.isPending ? 'Creating Link...' : 'Create Share Link'}
+                    {shareMutation.isPending
+                      ? 'Creating Link...'
+                      : 'Create Share Link'}
                   </button>
                 </div>
               )}

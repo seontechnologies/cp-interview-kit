@@ -63,8 +63,8 @@ export async function createWidget(dashboardId: string, data: any) {
   return response.data;
 }
 
-export async function updateWidget(dashboardId: string, widgetId: string, data: any) {
-  const response = await api.put(`/dashboards/${dashboardId}/widgets/${widgetId}`, data);
+export async function updateWidget(data: {dashboardId: string, widgetId: string, data: any}) {
+  const response = await api.put(`/dashboards/${data.dashboardId}/widgets/${data.widgetId}`, data.data);
   return response.data;
 }
 
