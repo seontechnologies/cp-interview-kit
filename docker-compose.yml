@@ -6,11 +6,11 @@ services:
       POSTGRES_PASSWORD: insighthub_password
       POSTGRES_DB: insighthub
     ports:
-      - "5432:5432"
+      - '5432:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U insighthub"]
+      test: ['CMD-SHELL', 'pg_isready -U insighthub']
       interval: 5s
       timeout: 5s
       retries: 5
@@ -18,11 +18,11 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - '6379:6379'
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ['CMD', 'redis-cli', 'ping']
       interval: 5s
       timeout: 5s
       retries: 5
@@ -32,7 +32,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     ports:
-      - "3001:3001"
+      - '3001:3001'
     environment:
       NODE_ENV: development
       DATABASE_URL: postgresql://insighthub:insighthub_password@postgres:5432/insighthub
@@ -50,12 +50,35 @@ services:
       - ./backend/prisma:/app/prisma
       - /app/node_modules
 
+  jobs:
+    build:
+      context: .
+      dockerfile: ./jobs/Dockerfile
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://insighthub:insighthub_password@postgres:5432/insighthub
+      SMTP_HOST: localhost
+      SMTP_PORT: '1025'
+      SMTP_USER: user
+      SMTP_PASS: pass
+      EMAIL_FROM: noreply@insighthub.io
+      FRONTEND_URL: http://localhost:3000
+      REPORTS_DIR: /tmp/reports
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./jobs/src:/app/src
+      - ./backend/prisma:/app/prisma
+      - /app/node_modules
+      - ./reports:/tmp/reports
+
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
     ports:
-      - "3000:3000"
+      - '3000:3000'
     environment:
       VITE_API_URL: http://localhost:3001
     depends_on:

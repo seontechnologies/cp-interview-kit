@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Node.js 18+ (we recommend using nvm)
+- Node.js 20+ (we recommend using nvm)
 - PostgreSQL 14+
 - Redis 6+
 - Docker (optional, for containerized development)
@@ -54,6 +54,7 @@ This starts:
 - Backend on http://localhost:3001
 - Frontend on http://localhost:3000
 - Redis (if using Docker)
+- Jobs service (if using Docker)
 
 ## Development Workflow
 
